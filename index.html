@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pick & Scrape — Multi-Source Web Scraper</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#2a3340;
+    --text:#e6edf3; --muted:#8b98a5; --accent:#6ea8fe; --accent2:#7ee787;
+    --bmc:#ffdd00; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 80% -10%, #1b2a4a 0%, var(--bg) 55%);
+    color:var(--text); min-height:100vh; line-height:1.5;
+  }
+  header{
+    display:flex; align-items:center; gap:16px; padding:18px 24px;
+    background:rgba(13,17,23,.6); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
+  }
+  .avatar{
+    width:52px; height:52px; border-radius:50%; object-fit:cover;
+    border:2px solid var(--accent); background:#222; flex:0 0 auto;
+  }
+  .brand{display:flex; flex-direction:column}
+  .brand b{font-size:1.05rem}
+  .brand span{font-size:.8rem; color:var(--muted)}
+  .bmc{
+    margin-left:auto; display:inline-flex; align-items:center; gap:8px;
+    background:var(--bmc); color:#000; font-weight:700; text-decoration:none;
+    padding:10px 16px; border-radius:10px; box-shadow:var(--shadow);
+    transition:transform .12s ease;
+  }
+  .bmc:hover{transform:translateY(-2px)}
+  .wrap{max-width:1080px; margin:0 auto; padding:28px 20px 64px}
+  h1{font-size:1.7rem; margin:6px 0 4px}
+  .lede{color:var(--muted); margin:0 0 22px; max-width:680px}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:22px}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:16px; cursor:pointer; transition:border-color .15s, transform .12s;
+  }
+  .card:hover{transform:translateY(-2px); border-color:var(--accent)}
+  .card.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(110,168,254,.25)}
+  .card h3{margin:0 0 6px; font-size:1.02rem}
+  .card p{margin:0; font-size:.83rem; color:var(--muted)}
+  .card .tag{display:inline-block; margin-top:10px; font-size:.72rem; color:var(--accent2);
+    border:1px solid #2f4030; background:#13241a; padding:2px 8px; border-radius:20px}
+  .controls{display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:18px}
+  button.action{
+    background:var(--accent); color:#06121f; border:none; font-weight:700;
+    padding:11px 20px; border-radius:10px; cursor:pointer; font-size:.95rem;
+    transition:filter .12s, transform .12s;
+  }
+  button.action:hover:not(:disabled){filter:brightness(1.08); transform:translateY(-1px)}
+  button.action:disabled{opacity:.5; cursor:not-allowed}
+  button.ghost{
+    background:transparent; color:var(--text); border:1px solid var(--border);
+    padding:11px 18px; border-radius:10px; cursor:pointer; font-weight:600;
+  }
+  button.ghost:disabled{opacity:.4; cursor:not-allowed}
+  #status{font-size:.9rem; color:var(--muted)}
+  .spinner{display:inline-block; width:14px; height:14px; border:2px solid var(--muted);
+    border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .meta{display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 14px; font-size:.85rem; color:var(--muted)}
+  .meta b{color:var(--text)}
+  .table-wrap{overflow:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel)}
+  table{border-collapse:collapse; width:100%; font-size:.86rem}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top}
+  th{position:sticky; top:0; background:var(--panel2); color:var(--accent); font-weight:600; white-space:nowrap}
+  tr:hover td{background:rgba(110,168,254,.05)}
+  td a{color:var(--accent)}
+  .empty{padding:40px; text-align:center; color:var(--muted)}
+  .err{color:#ff7b72; font-size:.9rem}
+  footer{color:var(--muted); font-size:.8rem; text-align:center; padding:30px 16px; border-top:1px solid var(--border); margin-top:40px}
+  footer a{color:var(--accent)}
+  code{background:#1e2630; padding:1px 6px; border-radius:5px; font-size:.82em}
+</style>
+</head>
+<body>
+<header>
+  <img class="avatar" id="avatar" alt="profile" />
+  <div class="brand"><b>Chen builds</b><span>Day 93 · 100 Days of Code</span></div>
+  <a class="bmc" href="https://buymeacoffee.com/chenbuilds" target="_blank" rel="noopener">
+    ☕ Buy me a coffee
+  </a>
+</header>
+
+<div class="wrap">
+  <h1>Pick &amp; Scrape</h1>
+  <p class="lede">Choose a source, hit scrape, and the page pulls live HTML through a CORS proxy,
+  parses it in your browser, and lets you download the result as a CSV. No backend required.</p>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="controls">
+    <button class="action" id="scrapeBtn">Scrape selected source</button>
+    <button class="ghost" id="csvBtn" disabled>⬇ Download CSV</button>
+    <span id="status">Select a source above to begin.</span>
+  </div>
+
+  <div class="meta" id="meta" style="display:none">
+    <span>Source: <b id="mSrc">—</b></span>
+    <span>Rows: <b id="mRows">0</b></span>
+    <span>Scraped: <b id="mTime">—</b></span>
+  </div>
+
+  <div class="table-wrap">
+    <table id="table"><tbody><tr><td class="empty">No data yet — pick a source and scrape.</td></tr></tbody></table>
+  </div>
+</div>
+
+<footer>
+  Built for the 100 Days of Code · Day 93 web-scraping challenge ·
+  <a href="https://github.com/VoyagePlanetGames/web-scraping" target="_blank" rel="noopener">source on GitHub</a><br>
+  Targets are public scraping sandboxes &amp; open pages. Be a good citizen: scrape responsibly.
+</footer>
+
+<!-- Inline SVG fallback avatar (used if assets/profile.jpg is missing) -->
+<script>
+  // Built-in fallback avatar so the site looks complete even before you add your real photo.
+  const FALLBACK_AVATAR = "data:image/svg+xml;utf8," + encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='104' height='104'>
+       <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+         <stop offset='0' stop-color='#6ea8fe'/><stop offset='1' stop-color='#7ee787'/></linearGradient></defs>
+       <rect width='104' height='104' rx='52' fill='url(#g)'/>
+       <text x='52' y='68' font-size='46' font-family='Arial' font-weight='700' fill='#0d1117' text-anchor='middle'>C</text>
+     </svg>`);
+  const avatar = document.getElementById('avatar');
+  avatar.src = "assets/profile.jpg";
+  avatar.onerror = () => { avatar.onerror = null; avatar.src = FALLBACK_AVATAR; };
+
+  /* ---------- CORS proxy chain (tried in order until one returns HTML) ---------- */
+  const PROXIES = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  ];
+  async function fetchHTML(url){
+    let lastErr;
+    for(const make of PROXIES){
+      try{
+        const res = await fetch(make(url), {headers:{'Accept':'text/html,*/*'}});
+        if(!res.ok) { lastErr = new Error('HTTP '+res.status); continue; }
+        const txt = await res.text();
+        if(txt && txt.length > 200) return txt;
+        lastErr = new Error('empty response');
+      }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('all proxies failed');
+  }
+  const doc = html => new DOMParser().parseFromString(html, 'text/html');
+  const txt = el => (el ? el.textContent.trim().replace(/\s+/g,' ') : '');
+
+  /* ---------- Source definitions ---------- */
+  const SOURCES = {
+    books: {
+      name: "Books to Scrape",
+      blurb: "Title, price, rating & stock from the classic scraping sandbox.",
+      tag: "always works",
+      columns: ["Title","Price","Rating","Availability"],
+      pages: ["https://books.toscrape.com/",
+              "https://books.toscrape.com/catalogue/page-2.html",
+              "https://books.toscrape.com/catalogue/page-3.html"],
+      parse(d){
+        const rate = {One:1,Two:2,Three:3,Four:4,Five:5};
+        return [...d.querySelectorAll("article.product_pod")].map(p=>{
+          const star = [...(p.querySelector("p.star-rating")?.classList||[])].find(c=>rate[c]);
+          return {
+            Title: p.querySelector("h3 a")?.getAttribute("title") || txt(p.querySelector("h3 a")),
+            Price: txt(p.querySelector(".price_color")),
+            Rating: (rate[star]||"?") + " / 5",
+            Availability: txt(p.querySelector(".availability"))
+          };
+        });
+      }
+    },
+    quotes: {
+      name: "Quotes to Scrape",
+      blurb: "Quote text, author and tags across several pages.",
+      tag: "always works",
+      columns: ["Quote","Author","Tags"],
+      pages: ["https://quotes.toscrape.com/",
+              "https://quotes.toscrape.com/page/2/",
+              "https://quotes.toscrape.com/page/3/"],
+      parse(d){
+        return [...d.querySelectorAll("div.quote")].map(q=>({
+          Quote: txt(q.querySelector(".text")).replace(/[“”"]/g,''),
+          Author: txt(q.querySelector(".author")),
+          Tags: [...q.querySelectorAll(".tags a.tag")].map(t=>t.textContent.trim()).join("; ")
+        }));
+      }
+    },
+    hn: {
+      name: "Hacker News",
+      blurb: "Front-page stories: rank, title, points, comments & link.",
+      tag: "live data",
+      columns: ["Rank","Title","Points","Comments","Link"],
+      pages: ["https://news.ycombinator.com/"],
+      parse(d){
+        return [...d.querySelectorAll("tr.athing")].map(row=>{
+          const sub = row.nextElementSibling;
+          const a = row.querySelector(".titleline a, .title a:last-of-type, td.title a");
+          const cs = [...(sub?.querySelectorAll(".subline a, .subtext a")||[])];
+          const cmt = cs.find(x=>/comment|discuss/i.test(x.textContent));
+          return {
+            Rank: txt(row.querySelector(".rank")).replace('.',''),
+            Title: txt(a),
+            Points: txt(sub?.querySelector(".score")).replace(/\D/g,'') || "0",
+            Comments: cmt ? (cmt.textContent.match(/\d+/)?.[0] || "0") : "0",
+            Link: a?.getAttribute("href") || ""
+          };
+        }).filter(r=>r.Title);
+      }
+    },
+    countries: {
+      name: "Countries of the World",
+      blurb: "Name, capital, population & area for ~250 countries.",
+      tag: "structured",
+      columns: ["Country","Capital","Population","Area (km²)"],
+      pages: ["https://www.scrapethissite.com/pages/simple/"],
+      parse(d){
+        return [...d.querySelectorAll(".country")].map(c=>({
+          Country: txt(c.querySelector(".country-name")),
+          Capital: txt(c.querySelector(".country-capital")),
+          Population: txt(c.querySelector(".country-population")),
+          "Area (km²)": txt(c.querySelector(".country-area"))
+        }));
+      }
+    }
+  };
+
+  /* ---------- UI wiring ---------- */
+  let selected = null, lastRows = [], lastCols = [];
+  const cards = document.getElementById('cards');
+  const statusEl = document.getElementById('status');
+  const scrapeBtn = document.getElementById('scrapeBtn');
+  const csvBtn = document.getElementById('csvBtn');
+  const tableEl = document.getElementById('table');
+
+  Object.entries(SOURCES).forEach(([key,s])=>{
+    const el = document.createElement('div');
+    el.className = 'card'; el.dataset.key = key;
+    el.innerHTML = `<h3>${s.name}</h3><p>${s.blurb}</p><span class="tag">${s.tag}</span>`;
+    el.onclick = ()=>{
+      document.querySelectorAll('.card').forEach(c=>c.classList.remove('active'));
+      el.classList.add('active'); selected = key;
+      statusEl.textContent = `Ready to scrape “${s.name}”.`;
+    };
+    cards.appendChild(el);
+  });
+
+  scrapeBtn.onclick = async ()=>{
+    if(!selected){ statusEl.innerHTML = '<span class="err">Pick a source first.</span>'; return; }
+    const s = SOURCES[selected];
+    scrapeBtn.disabled = true; csvBtn.disabled = true;
+    statusEl.innerHTML = `<span class="spinner"></span>Scraping ${s.name}…`;
+    try{
+      let rows = [];
+      for(let i=0;i<s.pages.length;i++){
+        statusEl.innerHTML = `<span class="spinner"></span>Fetching page ${i+1} of ${s.pages.length}…`;
+        const html = await fetchHTML(s.pages[i]);
+        rows = rows.concat(s.parse(doc(html)));
+      }
+      if(!rows.length) throw new Error('Parsed 0 rows — the page structure may have changed.');
+      lastRows = rows; lastCols = s.columns;
+      renderTable(s.columns, rows);
+      document.getElementById('meta').style.display = 'flex';
+      document.getElementById('mSrc').textContent = s.name;
+      document.getElementById('mRows').textContent = rows.length;
+      document.getElementById('mTime').textContent = new Date().toLocaleString();
+      statusEl.innerHTML = `Done — scraped <b>${rows.length}</b> rows.`;
+      csvBtn.disabled = false;
+    }catch(e){
+      statusEl.innerHTML = `<span class="err">Failed: ${e.message}. Try again — public proxies can be flaky.</span>`;
+    }finally{
+      scrapeBtn.disabled = false;
+    }
+  };
+
+  function renderTable(cols, rows){
+    const head = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+    const body = rows.map(r=>`<tr>${cols.map(c=>{
+      let v = r[c] ?? '';
+      if(c==='Link' && v) v = `<a href="${v}" target="_blank" rel="noopener">open ↗</a>`;
+      return `<td>${v}</td>`;
+    }).join('')}</tr>`).join('');
+    tableEl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+  }
+
+  csvBtn.onclick = ()=>{
+    if(!lastRows.length) return;
+    const esc = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+    const lines = [lastCols.map(esc).join(',')]
+      .concat(lastRows.map(r=>lastCols.map(c=>esc(r[c])).join(',')));
+    const blob = new Blob(["﻿"+lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${selected}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+</script>
+</body>
+</html>
